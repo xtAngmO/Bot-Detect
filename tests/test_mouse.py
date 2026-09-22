@@ -73,10 +73,19 @@ def _register(name: str) -> None:
     u.RegisterClassW(ctypes.byref(wc))
 
 
+# ลงทะเบียนตอน import ไม่ใช่ใน __main__ — pytest ไม่ได้รันบล็อกนั้น ถ้า class ยังไม่ถูกลงทะเบียน
+# CreateWindowExW จะคืน NULL เงียบๆ แล้วทุกเทสต์ที่ต้องมีหน้าต่างจริงจะตกไปทาง SendInput หมด
+_register(TARGET_CLASS)
+_register(COVER_CLASS)
+
+
 def _window(cls: str, topmost: bool = False) -> int:
     ex = 0x80 | 0x08000000 | (0x8 if topmost else 0)  # TOOLWINDOW | NOACTIVATE | TOPMOST
-    return u.CreateWindowExW(ex, cls, cls, 0x80000000 | 0x10000000, ORIGIN[0], ORIGIN[1], 200, 100,
+    hwnd = u.CreateWindowExW(ex, cls, cls, 0x80000000 | 0x10000000, ORIGIN[0], ORIGIN[1], 200, 100,
                              None, None, k.GetModuleHandleW(None), None)
+    # เช็คก่อน — สร้างหน้าต่างไม่ได้จะคืน NULL เฉยๆ แล้วเทสต์ไปตกที่ assert อื่นแทน อ่านไม่ออกว่าพังตรงไหน
+    assert hwnd, f"สร้างหน้าต่างเทสต์ ({cls}) ไม่ได้: error {k.GetLastError()}"
+    return hwnd
 
 
 def _pump(seconds: float = 0.2) -> None:
@@ -213,8 +222,6 @@ def test_other_windows_fall_back_to_sendinput() -> None:
 
 
 if __name__ == "__main__":
-    _register(TARGET_CLASS)
-    _register(COVER_CLASS)
     test_lparam_packs_signed_words()
     test_post_click_pairs_move_with_down_and_up()
     test_scrcpy_window_taps_phone_directly()
