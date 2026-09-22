@@ -6,9 +6,13 @@
 video=false) แล้วส่ง INJECT_TOUCH_EVENT ด้วยพิกัดมือถือตรงๆ ไม่ผ่าน Windows/เมาส์เลย — วัดด้วย Pointer
 location แล้วแตะตรงจุด ต่อเสร็จ ~0.5s. scrcpy ตัวจริงของผู้ใช้ทำงานต่อได้ตามปกติ (server คนละตัว)
 
-**ใช้ adb.exe + scrcpy-server จากโฟลเดอร์เดียวกับ scrcpy.exe ที่เปิดหน้าต่างอยู่เสมอ** — adb คนละเวอร์ชันจะ
-kill adb server ของ scrcpy ตัวจริงทิ้ง ("adb server version (40) doesn't match this client (41); killing...")
-และ scrcpy-server ต้องเวอร์ชันเดียวกับที่บอกตอนเปิด (อ่านจาก `scrcpy.exe --version`)
+ใช้ได้ทั้ง Windows และ macOS — โปรโตคอลกับ adb เหมือนกันหมด ต่างแค่ที่อยู่ของไฟล์กับวิธีอ่าน path ของ
+process (ดู resolve_tools() กับ exe_path_of_pid())
+
+**adb ต้องเป็นตัวเดียวกับที่ scrcpy ตัวจริงใช้อยู่** — adb คนละเวอร์ชันจะ kill adb server ของ scrcpy
+ทิ้ง ("adb server version (40) doesn't match this client (41); killing...") บน Windows จึงหยิบ adb.exe
+จากโฟลเดอร์เดียวกับ scrcpy.exe ส่วน macOS (Homebrew) มี adb ตัวเดียวใน PATH อยู่แล้วจึงใช้ตัวนั้น
+และ scrcpy-server ต้องเวอร์ชันเดียวกับที่บอกตอนเปิด (อ่านจาก `scrcpy --version`)
 """
 from __future__ import annotations
 
@@ -16,13 +20,16 @@ import ctypes
 import os
 import random
 import re
+import shutil
 import socket
 import struct
 import subprocess
+import sys
 import threading
 import time
-from ctypes import wintypes
 from typing import List, Optional, Tuple
+
+IS_WINDOWS = sys.platform == "win32"
 
 DEVICE_JAR = "/data/local/tmp/hiu-bot-scrcpy-server.jar"  # คนละ path กับของ scrcpy ตัวจริง
 # INJECT_TOUCH_EVENT ของ scrcpy 4.x (byte อ้างอิงอยู่ใน tests/test_phonetap.py — เทียบกับซอร์ส v4.1 แล้ว):
@@ -32,7 +39,8 @@ _TYPE_INJECT_TOUCH_EVENT = 2
 ACTION_DOWN = 0
 ACTION_UP = 1
 _POINTER_ID_GENERIC_FINGER = -2  # server ฉีดเป็นนิ้วแตะจอ (SOURCE_TOUCHSCREEN)
-_NO_WINDOW = 0x08000000  # CREATE_NO_WINDOW — ไม่ให้ adb เด้งหน้าต่าง console
+# CREATE_NO_WINDOW — ไม่ให้ adb เด้งหน้าต่าง console (มีเฉพาะ Windows, ระบบอื่นส่ง 0 = ไม่ตั้ง flag)
+_NO_WINDOW = 0x08000000 if IS_WINDOWS else 0
 
 
 class PhoneTapError(RuntimeError):
@@ -77,7 +85,9 @@ def parse_wm_size(text: str) -> Tuple[int, int]:
     return w, h
 
 
-def exe_dir_of_pid(pid: int) -> str:
+def _exe_path_of_pid_windows(pid: int) -> str:
+    from ctypes import wintypes
+
     k = ctypes.WinDLL("kernel32")
     k.OpenProcess.restype = wintypes.HANDLE
     k.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
@@ -90,9 +100,70 @@ def exe_dir_of_pid(pid: int) -> str:
         size = wintypes.DWORD(len(buf))
         if not k.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
             raise PhoneTapError(f"อ่าน path ของ process {pid} ไม่ได้")
-        return os.path.dirname(buf.value)
+        return buf.value
     finally:
         k.CloseHandle(handle)
+
+
+_PROC_PIDPATHINFO_MAXSIZE = 4 * 1024  # ตามที่ libproc กำหนด — proc_pidpath ต้องได้ buffer อย่างน้อยเท่านี้
+
+
+def _exe_path_of_pid_darwin(pid: int) -> str:
+    """เทียบเท่า QueryFullProcessImageNameW ของ Windows — proc_pidpath() อยู่ใน libSystem อยู่แล้ว
+    จึงไม่ต้องลง dependency เพิ่ม (psutil ฯลฯ)."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.proc_pidpath.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
+    libc.proc_pidpath.restype = ctypes.c_int
+    buf = ctypes.create_string_buffer(_PROC_PIDPATHINFO_MAXSIZE)
+    written = libc.proc_pidpath(pid, buf, ctypes.sizeof(buf))
+    if written <= 0:
+        raise PhoneTapError(f"อ่าน path ของ process {pid} ไม่ได้ ({os.strerror(ctypes.get_errno())})")
+    return buf.value[:written].decode("utf-8", "replace")
+
+
+def exe_path_of_pid(pid: int) -> str:
+    """path เต็มของไฟล์รันของ process — ใช้หาว่า scrcpy ที่เปิดหน้าต่างอยู่ถูกติดตั้งไว้ที่ไหน."""
+    if IS_WINDOWS:
+        return _exe_path_of_pid_windows(pid)
+    path = _exe_path_of_pid_darwin(pid)
+    # Homebrew วาง /opt/homebrew/bin/scrcpy เป็น symlink ไป Cellar แต่ proc_pidpath คืน path จริงอยู่แล้ว
+    # — realpath ไว้กันกรณีรันผ่าน symlink อื่น เพราะ scrcpy-server หาแบบอิงตำแหน่งไฟล์รันจริง
+    return os.path.realpath(path)
+
+
+def exe_dir_of_pid(pid: int) -> str:
+    return os.path.dirname(exe_path_of_pid(pid))
+
+
+def _first_existing(*candidates: str) -> str:
+    """ตัวแรกที่มีอยู่จริง — ไม่เจอเลยคืนตัวแรก (ไว้ให้ connect() ฟ้องด้วย path ที่คาดหวังที่สุด)."""
+    real = [c for c in candidates if c]
+    for path in real:
+        if os.path.isfile(path):
+            return path
+    return real[0] if real else ""
+
+
+def resolve_tools(scrcpy_dir: str) -> Tuple[str, str, str]:
+    """(adb, scrcpy-server, scrcpy) ของ scrcpy ที่ติดตั้งไว้ที่ `scrcpy_dir` — คนละที่กันตามระบบ
+
+    Windows (zip/winget ทางการ): ทั้งสามไฟล์อยู่โฟลเดอร์เดียวกับ scrcpy.exe — **ต้องใช้ adb ตัวนั้น**
+    เพราะ adb คนละเวอร์ชันจะ kill adb server ของ scrcpy ตัวจริงทิ้ง
+    macOS (Homebrew): `bin/scrcpy` กับ `share/scrcpy/scrcpy-server` แยกกันตาม prefix และไม่มี adb ใน
+    Cellar เลย — ใช้ adb ตัวเดียวใน PATH ซึ่งเป็นตัวเดียวกับที่ scrcpy ตัวจริงใช้อยู่ จึงไม่ชนกัน
+    """
+    if IS_WINDOWS:
+        return (os.path.join(scrcpy_dir, "adb.exe"),
+                os.path.join(scrcpy_dir, "scrcpy-server"),
+                os.path.join(scrcpy_dir, "scrcpy.exe"))
+    prefix = os.path.dirname(scrcpy_dir)  # .../bin → ...
+    server = _first_existing(
+        os.environ.get("SCRCPY_SERVER_PATH", ""),  # scrcpy เองก็อ่านตัวแปรนี้ ผู้ใช้ตั้งไว้แล้วก็ตามนั้น
+        os.path.join(scrcpy_dir, "scrcpy-server"),  # build เอง/พกพา — วางไว้ข้างไฟล์รัน
+        os.path.join(prefix, "share", "scrcpy", "scrcpy-server"),  # Homebrew กับแพ็กเกจทั่วไป
+    )
+    adb = _first_existing(os.path.join(scrcpy_dir, "adb"), shutil.which("adb") or "")
+    return adb, server, os.path.join(scrcpy_dir, "scrcpy")
 
 
 class PhoneTapper:
@@ -101,9 +172,7 @@ class PhoneTapper:
     CONNECT_TIMEOUT_S = 10.0
 
     def __init__(self, scrcpy_dir: str, window_title: str = "") -> None:
-        self.adb = os.path.join(scrcpy_dir, "adb.exe")
-        self.server = os.path.join(scrcpy_dir, "scrcpy-server")
-        self.scrcpy = os.path.join(scrcpy_dir, "scrcpy.exe")
+        self.adb, self.server, self.scrcpy = resolve_tools(scrcpy_dir)
         self.window_title = window_title
         self.serial = ""
         self.size: Tuple[int, int] = (0, 0)  # แนวตั้ง
@@ -130,9 +199,11 @@ class PhoneTapper:
         return m.group(1)
 
     def connect(self) -> "PhoneTapper":
-        for path in (self.adb, self.server, self.scrcpy):
+        for name, path in (("adb", self.adb), ("scrcpy-server", self.server), ("scrcpy", self.scrcpy)):
+            if not path:
+                raise PhoneTapError(f"ไม่พบ {name} (ไม่มีใน PATH — ติดตั้ง scrcpy ให้ครบก่อน)")
             if not os.path.isfile(path):
-                raise PhoneTapError(f"ไม่พบ {os.path.basename(path)} ข้าง scrcpy.exe ({os.path.dirname(path)})")
+                raise PhoneTapError(f"ไม่พบ {name} ที่ {path}")
         version = self._version()
         self.serial = pick_serial(parse_devices(self._run("devices", "-l", serial=False)), self.window_title)
         self.size = parse_wm_size(self._run("shell", "wm", "size"))

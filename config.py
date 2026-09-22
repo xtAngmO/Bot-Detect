@@ -11,7 +11,9 @@ import os
 from dataclasses import asdict, dataclass, field
 from typing import Optional, Tuple
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+import apppaths
+
+BASE_DIR = apppaths.config_dir()  # รันจากซอร์ส = โฟลเดอร์โปรเจกต์, แพ็กแล้ว = โฟลเดอร์ตั้งค่าของผู้ใช้
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
 Rect = Tuple[int, int, int, int]  # (left, top, width, height) — absolute screen px

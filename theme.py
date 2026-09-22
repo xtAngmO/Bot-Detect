@@ -9,13 +9,16 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import tempfile
 
 from PySide6.QtCore import QByteArray, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPalette, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+import apppaths
+
+BASE_DIR = apppaths.resource_dir()  # แพ็กแล้วไฟล์ประกอบอยู่ในโฟลเดอร์ที่ PyInstaller แตกไว้
 FONT_DIR = os.path.join(BASE_DIR, "fonts")
 ICON_DIR = os.path.join(BASE_DIR, "assets", "icons")
 
@@ -54,8 +57,16 @@ RADIUS = 4
 H_CTRL = 28
 H_RUN = 36
 
-FONT_SANS = ["Anuphan", "Segoe UI"]
-FONT_MONO = ["JetBrains Mono", "Cascadia Mono", "Consolas", "Courier New"]
+# ฟอนต์สำรอง — ตัวแรกคือที่ฝังมากับโปรแกรม (fonts/) จึงได้ตัวนั้นเสมออยู่แล้ว ที่เหลือเผื่อโหลดไม่ขึ้น
+# ใส่เฉพาะที่มีจริงในระบบนั้น: ถ้าใส่ชื่อฟอนต์ที่ไม่มี Qt จะไล่สแกนฟอนต์ทั้งเครื่องแล้วเตือน
+# "Populating font family aliases took ... Replace uses of missing font family" ทุกครั้งที่เปิดโปรแกรม
+if sys.platform == "darwin":
+    # ไม่ใส่ SF Pro / SF Mono — เป็นฟอนต์ระบบที่ Qt มองไม่เห็นเป็น family ธรรมดา (ตรวจแล้วขึ้น missing)
+    FONT_SANS = ["Anuphan", "Helvetica Neue"]
+    FONT_MONO = ["JetBrains Mono", "Menlo", "Monaco", "Courier New"]
+else:
+    FONT_SANS = ["Anuphan", "Segoe UI"]
+    FONT_MONO = ["JetBrains Mono", "Cascadia Mono", "Consolas", "Courier New"]
 # SemiBold ของ JetBrains ต้องขอเป็น family แยก — ตั้ง weight บน family ปกติแล้ว Qt สังเคราะห์ตัวหนาให้เอง (เยิน)
 FONT_MONO_BOLD = ["JetBrains Mono SemiBold"] + FONT_MONO
 

@@ -4,3 +4,9 @@ __pycache__/
 config.json
 draft/*.html
 .impeccable/
+
+# ผลลัพธ์จาก PyInstaller
+build/
+dist/
+*.spec.bak
+.pytest_cache/

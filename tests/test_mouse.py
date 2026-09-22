@@ -1,4 +1,4 @@
-"""เทสต์เส้นทางคลิกของ mouse.py (ไม่ขยับเมาส์จริง) — รัน: .venv\\Scripts\\python.exe tests\\test_mouse.py
+"""เทสต์เส้นทางคลิกฝั่ง Windows (mouse_win.py, ไม่ขยับเมาส์จริง) — รัน: .venv\\Scripts\\python.exe tests\\test_mouse.py
 
 ใช้หน้าต่าง Win32 จริงที่วางไว้นอกจอแทน scrcpy: เช็คว่า click() หาหน้าต่างเจอแม้มีหน้าต่างอื่นทับ,
 แปลงจุดบนหน้าต่างเป็นสัดส่วนบนจอมือถือถูก (รวมขอบดำ) แล้วส่งให้ phonetap (แทนด้วยตัวปลอม), และทางสำรอง
@@ -8,11 +8,18 @@ import ctypes
 import os
 import sys
 import time
-from ctypes import wintypes
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import mouse
+if sys.platform != "win32":  # ทั้งไฟล์ใช้ Win32 API ตรงๆ — ฝั่ง macOS ดู tests/test_mouse_mac.py
+    import pytest
+
+    # ต้อง skip ก่อน import ctypes.wintypes — โมดูลนั้น import บนระบบอื่นไม่ได้เลย (ValueError)
+    pytest.skip("เทสต์ทางคลิกฝั่ง Windows — รันบน Windows เท่านั้น", allow_module_level=True)
+
+from ctypes import wintypes
+
+import mouse_win as mouse
 
 u = ctypes.WinDLL("user32")
 k = ctypes.WinDLL("kernel32")

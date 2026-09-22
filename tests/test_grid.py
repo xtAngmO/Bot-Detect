@@ -7,9 +7,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 import capture
+import testfonts
 
 capture.configure_tesseract("")
 
@@ -21,10 +22,7 @@ GAP = 14
 def _build_grid_image():
     img = Image.new("RGB", (CELL * COLS, CELL * ROWS), "#e5e5e5")
     d = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.truetype("arial.ttf", 42)
-    except Exception:
-        font = ImageFont.load_default()
+    font = testfonts.truetype(testfonts.REGULAR, 42)
 
     nums = list(range(1, ROWS * COLS + 1))
     random.shuffle(nums)

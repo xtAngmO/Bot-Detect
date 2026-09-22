@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Iterable, List, Optional, Tuple
 
@@ -36,18 +38,46 @@ def _ocr_pool() -> ThreadPoolExecutor:
         _pool = ThreadPoolExecutor(max_workers=_OCR_WORKERS, thread_name_prefix="ocr")
     return _pool
 
-# path เริ่มต้นของ Tesseract บน Windows (เหมือน bot_detect_word) — ตั้งให้อัตโนมัติถ้าเจอ
-# และผู้ใช้ยังไม่ได้ตั้งเองใน config
-_DEFAULT_TESSERACT = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+# path เริ่มต้นของ Tesseract ที่ลองไล่หาให้เมื่อผู้ใช้ยังไม่ได้ตั้งเองใน config
+# Windows: ที่ติดตั้งมาตรฐานของ UB-Mannheim (เหมือน bot_detect_word)
+# macOS: Homebrew ทั้ง Apple Silicon (/opt/homebrew) และ Intel (/usr/local) — ปกติอยู่ใน PATH อยู่แล้ว
+# แต่แอปที่เปิดจาก Finder/.app ไม่ได้รับ PATH ของ shell จึงต้องไล่หาเองด้วย
+if sys.platform == "win32":
+    _DEFAULT_TESSERACT = (r"C:\Program Files\Tesseract-OCR\tesseract.exe",)
+else:
+    _DEFAULT_TESSERACT = ("/opt/homebrew/bin/tesseract", "/usr/local/bin/tesseract")
 
 
 def configure_tesseract(explicit_cmd: str = "") -> None:
     if explicit_cmd:
         pytesseract.pytesseract.tesseract_cmd = explicit_cmd
         return
-    if os.path.isfile(_DEFAULT_TESSERACT):
-        pytesseract.pytesseract.tesseract_cmd = _DEFAULT_TESSERACT
+    found = shutil.which("tesseract") or next((p for p in _DEFAULT_TESSERACT if os.path.isfile(p)), "")
+    if found:
+        pytesseract.pytesseract.tesseract_cmd = found
     # ไม่งั้นปล่อยให้ pytesseract หาจาก PATH เอง
+
+
+def screen_capture_warning() -> str:
+    """macOS: ข้อความเตือนถ้ายังไม่ได้เปิดสิทธิ์ Screen Recording (ว่าง = เรียบร้อยดี)
+
+    สำคัญมาก เพราะระบบ **ไม่ได้ error** เมื่อไม่มีสิทธิ์ — mss จับได้แต่ภาพพื้นหลังเดสก์ท็อป ไม่มีหน้าต่าง
+    ของแอปอื่นเลย บอทจะอ่านเลขไม่ออกรัวๆ โดยไม่รู้สาเหตุ ตรวจไว้ตั้งแต่เปิดโปรแกรมจะได้บอกตรงๆ
+    """
+    if sys.platform != "darwin":
+        return ""
+    try:
+        import Quartz
+
+        if Quartz.CGPreflightScreenCaptureAccess():
+            return ""
+        Quartz.CGRequestScreenCaptureAccess()  # ขึ้นกล่องขออนุญาตให้ครั้งแรก
+        if Quartz.CGPreflightScreenCaptureAccess():
+            return ""
+    except Exception:
+        return ""
+    return ("ยังไม่ได้เปิดสิทธิ์ Screen Recording — จับภาพจะได้แต่พื้นหลังเดสก์ท็อป อ่านเลขไม่ออก "
+            "เปิดที่ System Settings → Privacy & Security → Screen & System Audio Recording แล้วเปิดบอทใหม่")
 
 
 def grab(rect: Rect) -> Image.Image:

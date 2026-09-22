@@ -4,9 +4,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 import capture
+import testfonts
 
 capture.configure_tesseract("")
 
@@ -14,10 +15,7 @@ capture.configure_tesseract("")
 def _digit_image(text: str, size: int = 60) -> Image.Image:
     img = Image.new("RGB", (120, 120), "white")
     d = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.truetype("arial.ttf", size)
-    except Exception:
-        font = ImageFont.load_default()
+    font = testfonts.truetype(testfonts.REGULAR, size)
     d.text((20, 25), text, fill="black", font=font)
     return img
 
@@ -39,7 +37,7 @@ def _bold_card(text: str, size: int) -> Image.Image:
     img = Image.new("RGB", (110, 150), "#e8e8e8")
     d = ImageDraw.Draw(img)
     d.rounded_rectangle((4, 4, 106, 146), radius=12, fill="#f4f4f4")
-    font = ImageFont.truetype("ariblk.ttf", size)
+    font = testfonts.truetype(testfonts.BLACK, size)
     b = d.textbbox((0, 0), text, font=font)
     d.text(((110 - (b[2] - b[0])) / 2 - b[0], (150 - (b[3] - b[1])) / 2 - b[1]), text, fill="#2b2b2b", font=font)
     return img

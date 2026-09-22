@@ -1,6 +1,6 @@
 # Number Sequence Bot
 
-A Windows desktop bot that plays **Schulte-grid number games** by itself. These games show the numbers
+A **Windows and macOS** desktop bot that plays **Schulte-grid number games** by itself. These games show the numbers
 1–25 shuffled on a 5×5 grid and you tap them in ascending order. When you tap `n`, its cell shows
 `n + 25`, so a full game runs from 1 to 50. The bot reads the grid from the screen with OCR, works out
 where each number is, and taps them in order at the speed you set.
@@ -31,25 +31,49 @@ emulator such as LDPlayer, or in a browser.
 
 ## Requirements
 
-- Windows 10 or 11
-- Python 3.11+ (developed on 3.14)
-- [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) installed at
-  `C:\Program Files\Tesseract-OCR\tesseract.exe`. It is detected automatically. For another location,
-  set `tesseract_cmd` in `config.json`.
-- For playing on a phone: **scrcpy 4.x** (the official Windows zip or `winget install Genymobile.scrcpy`,
-  which ship `adb.exe` and `scrcpy-server` next to `scrcpy.exe`), with USB debugging enabled on the phone
+- Windows 10/11, or macOS 12+ (Apple Silicon or Intel)
+- Python 3.11+ (developed on 3.14 for Windows, 3.13 for macOS)
+- **Tesseract OCR** — found automatically in `PATH` or at the standard install location
+  ([Windows](https://github.com/UB-Mannheim/tesseract/wiki): `C:\Program Files\Tesseract-OCR\tesseract.exe`;
+  macOS: `brew install tesseract`). For another location, set `tesseract_cmd` in `config.json`.
+- For playing on a phone: **scrcpy 4.x** with USB debugging enabled
+  - Windows: the official zip or `winget install Genymobile.scrcpy` — ships `adb.exe` and
+    `scrcpy-server` next to `scrcpy.exe`
+  - macOS: `brew install scrcpy` — `scrcpy-server` lives in `share/scrcpy/` and `adb` comes from
+    `PATH`; both are located automatically
+
+### macOS permissions
+
+macOS blocks screen reading and key watching until you allow them. Grant these to whatever runs the
+bot (Terminal, iTerm, or the packaged app) in **System Settings → Privacy & Security**:
+
+| Permission | Needed for | If missing |
+| --- | --- | --- |
+| **Screen & System Audio Recording** | reading the grid | capture silently returns only the desktop wallpaper, so the bot cannot read any number — it warns you at startup |
+| **Accessibility** | the **Esc** panic key working from any window | the bot still runs; stop it from the bot window instead |
 
 ## Install
 
 ```powershell
+# Windows
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
+```
+
+```bash
+# macOS
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
 ```
 
 ## Run
 
 ```powershell
-.venv\Scripts\python.exe main.py
+.venv\Scripts\python.exe main.py   # Windows
+```
+
+```bash
+.venv/bin/python main.py            # macOS
 ```
 
 ## Usage
@@ -80,8 +104,11 @@ The frame positions and settings are saved to `config.json` next to the script.
 
 ## How it works
 
-1. **Capture.** `mss` grabs the frames from the screen. Qt works in logical pixels, but capture and
-   input use physical pixels, so `screenmap.py` converts between them for displays scaled above 100%.
+1. **Capture.** `mss` grabs the frames from the screen. Qt works in logical pixels; `screenmap.py`
+   converts those to whatever capture and input actually want. On Windows that means physical pixels,
+   so it scales by the display's ratio for displays above 100%. On macOS both `mss` and `CGEvent`
+   already use the same points as Qt, so no conversion is applied — scaling by the Retina ratio there
+   would send every capture and click to twice the intended coordinates.
 2. **OCR.** Each cell is cropped to its digits and scaled so the digits are about 40 px tall. Tesseract
    then reads it in digits-only mode, trying page-segmentation modes 6, 7 and 8 at a few sizes.
 3. **Rule check.** `gridsolve.py` matches every cell to the set of numbers the grid must contain and
@@ -94,27 +121,45 @@ The frame positions and settings are saved to `config.json` next to the script.
    screen and continues from the game's real state.
 6. **Input path.** How the bot taps depends on the window under the point:
    - **scrcpy window:** a touch is injected into the phone through a second, control-only scrcpy server
-     (`phonetap.py`). The bot always uses the `adb.exe` and `scrcpy-server` from the folder of the
-     running scrcpy, because a different adb version would restart the adb server and cut off scrcpy.
-     If the phone cannot be reached, it falls back to posting mouse messages to the window.
-   - **Any other window:** the bot moves the mouse and clicks with `SendInput`.
+     (`phonetap.py`) — the same on both systems, and the main path. On Windows the bot uses the
+     `adb.exe` and `scrcpy-server` from the folder of the running scrcpy, because a different adb
+     version would restart the adb server and cut off scrcpy; on macOS `scrcpy-server` is read from
+     `share/scrcpy/` and `adb` from `PATH`, which is the same one scrcpy itself uses.
+   - **If the phone cannot be reached:** Windows falls back to posting mouse messages to the window.
+     macOS has no equivalent — the system does not let one app post events into another's window — so
+     it falls back to a real mouse click, which needs the scrcpy window in front.
+   - **Any other window:** the bot moves the mouse and clicks (`SendInput` on Windows, `CGEvent` on
+     macOS).
 
 ## Tests
 
+Run the whole suite with pytest:
+
 ```powershell
-.venv\Scripts\python.exe tests\test_ocr.py           # single-number OCR
-.venv\Scripts\python.exe tests\test_grid.py          # full 5x5 grid OCR (randomised)
-.venv\Scripts\python.exe tests\test_real_capture.py  # real game captures (browser at 125%, scrcpy)
-.venv\Scripts\python.exe tests\test_gridsolve.py     # rule-based cell/number matching
-.venv\Scripts\python.exe tests\test_solver.py        # solver loop against a simulated game
-.venv\Scripts\python.exe tests\test_screenmap.py     # logical/physical coordinates
-.venv\Scripts\python.exe tests\test_mouse.py         # click routing (never moves the real mouse)
-.venv\Scripts\python.exe tests\test_phonetap.py      # touch injection against a fake scrcpy server
-$env:QT_QPA_PLATFORM = "offscreen"; .venv\Scripts\python.exe tests\test_app_smoke.py
+.venv\Scripts\python.exe -m pytest tests\   # Windows
 ```
 
-None of the tests need a phone, a game or a visible screen. The UI test replaces `Settings.save`
-with a no-op, so your real `config.json` is never overwritten.
+```bash
+.venv/bin/python -m pytest tests/            # macOS
+```
+
+| Test | Covers |
+| --- | --- |
+| `test_ocr.py` | single-number OCR |
+| `test_grid.py` | full 5×5 grid OCR (randomised) |
+| `test_real_capture.py` | real game captures (browser at 125%, scrcpy) |
+| `test_gridsolve.py` | rule-based cell/number matching |
+| `test_solver.py` | solver loop against a simulated game |
+| `test_screenmap.py` | logical ↔ device coordinates |
+| `test_mouse.py` | Windows click routing (skipped on macOS) |
+| `test_mouse_mac.py` | macOS click routing (skipped on Windows) |
+| `test_phonetap.py` | touch injection against a fake scrcpy server |
+| `test_app_smoke.py` | UI builds and starts headless |
+
+The two click-routing tests are platform-specific and skip themselves on the other system, so the
+suite is green on both. Neither moves the real mouse. No test needs a phone, a game or a visible
+screen, and the UI test replaces `Settings.save` with a no-op so your real `config.json` is never
+overwritten.
 
 ## Project layout
 
@@ -127,25 +172,31 @@ with a no-op, so your real `config.json` is never overwritten.
 | `capture.py` | Screen capture, digit OCR, grid comparison |
 | `gridsolve.py` | Rule-based OCR correction (Hungarian assignment) |
 | `solver.py` | Game loop, pacing, pipelined taps, idle pre-reading |
-| `mouse.py` | Click routing: phone touch, window messages, or `SendInput` |
+| `mouse.py` | Picks the click backend for the current system |
+| `mouse_win.py` | Windows clicks: phone touch, window messages, or `SendInput` |
+| `mouse_mac.py` | macOS clicks: phone touch or `CGEvent` |
 | `phonetap.py` | Second scrcpy server (control only) for touch injection |
-| `screenmap.py` | Logical ↔ physical screen coordinates |
+| `hotkey.py` | Panic key: `keyboard` on Windows, a Quartz event tap on macOS |
+| `screenmap.py` | Qt ↔ capture/click coordinates (Windows scaling, macOS points) |
 | `config.py` | Settings model and `config.json` load/save |
 | `fonts/`, `assets/icons/` | Bundled fonts and icons (license files included) |
 | `tests/` | Headless tests and real-capture fixtures |
 
 ## Known limitations
 
-- Windows only.
 - The game must stay visible on screen, because OCR reads the screen. When playing on a phone, taps
   still work if the scrcpy window is covered, but reading does not.
 - Grid-only mode cannot detect a dropped tap. Every tap after it will land on the wrong number.
 - Phone touch injection uses the scrcpy 4.x message format. A future major scrcpy version may need an
-  update. Until then, the bot falls back to the less reliable window messages.
-- The `SendInput` path only supports the primary monitor.
+  update. Until then, the bot falls back to the less reliable paths described above.
+- The `SendInput` path (Windows) only supports the primary monitor.
+- On macOS, leave the scrcpy window at the size scrcpy gives it. If you stretch it taller than the
+  phone's aspect ratio, the black bars that appear cannot be told apart from the window's title bar,
+  and taps drift down by the height of the bar.
 - OCR assumes dark digits on a light background. A different colour scheme needs changes to
   `_INK_THRESHOLD` in `capture.py`.
-- There is no packaged `.exe` yet. Run it from source.
+- The packaged builds are unsigned. Windows SmartScreen shows "More info → Run anyway"; on macOS use
+  right-click → Open the first time, or run `xattr -dr com.apple.quarantine "Number Sequence Bot.app"`.
 
 ## Credits
 

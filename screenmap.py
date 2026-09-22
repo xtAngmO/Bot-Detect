@@ -1,15 +1,22 @@
-"""แปลงพิกัด Qt (logical px) <-> พิกัดจอจริง (physical px)
+"""แปลงพิกัด Qt (logical px) <-> พิกัดที่ใช้จับภาพ/คลิกจริง
 
-Qt 6 ทำงานเป็น logical px เสมอ (กรอบ overlay, config.json เก็บค่านี้) แต่ mss (จับภาพ) และ
+**Windows**: Qt 6 ทำงานเป็น logical px เสมอ (กรอบ overlay, config.json เก็บค่านี้) แต่ mss (จับภาพ) และ
 SendInput (คลิก) ใช้ physical px — บนจอที่ตั้ง scale ไว้ 125% กรอบที่ผู้ใช้เห็นอยู่ที่ logical × 1.25
 ถ้าส่งพิกัด Qt ไปจับภาพตรงๆ จะได้ภาพผิดที่ทั้งก้อน (เคยพัง: บอทขึ้น "อ่านเลขต่อไปไม่ออก" รัวๆ
 เพราะไปจับเมนูของหน้าต่างอื่นแทนตัวเลขในเกม)
 
 สูตรของ Qt: จุดมุมซ้ายบนของแต่ละจอเท่ากันทั้งสองระบบ ส่วนที่เหลือคูณ devicePixelRatio ของจอนั้น
     physical = origin + (logical - origin) * scale
+
+**macOS**: ไม่ต้องแปลงเลย (scale = 1) — ทั้ง mss และ CGEvent ใช้ "points" ชุดเดียวกับ Qt ไม่ใช่พิกเซลจริง
+บนจอ Retina ที่ dpr = 2 (วัดจริง: จอ 1512×982 points = 3024×1964 px, mss.grab ขอ 200×150 ได้ภาพ 200×150)
+ถ้าเผลอคูณ dpr ตาม Qt เหมือนฝั่ง Windows จะจับภาพและคลิกเลยไปเท่าตัว — หลุดจอไปเลยด้วยซ้ำ
+ภาพที่ mss คืนมาบน Retina จึงละเอียดกว่าที่ขอ 2 เท่าโดยอัตโนมัติ ซึ่งเป็นผลดีกับ OCR (capture.py
+ปรับขนาดตามความสูงตัวเลขที่วัดได้อยู่แล้ว ไม่ยึดขนาดที่ขอ)
 """
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from typing import Tuple
 
@@ -35,6 +42,8 @@ class ScreenMap:
         if screen is None:
             return cls()
         g = screen.geometry()
+        if sys.platform == "darwin":
+            return cls(g.x(), g.y(), 1.0)  # mss/CGEvent ใช้ points เดียวกับ Qt — ดูหัวไฟล์
         return cls(g.x(), g.y(), screen.devicePixelRatio())
 
     def to_physical(self, rect: Rect) -> Rect:

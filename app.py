@@ -26,10 +26,7 @@ from solver import Solver
 from theme import PALETTE, SP
 from widgets import Section, Segmented, Stat, StatDot, button, hline, set_button, setting_row
 
-try:
-    import keyboard  # global hotkey (panic key) — ต้องรันแบบ Administrator บางเครื่อง
-except Exception:  # pragma: no cover — เครื่องที่ยังไม่ได้ pip install
-    keyboard = None
+import hotkey  # panic key ที่กดได้จากทุกหน้าต่าง (กลไกต่างกันตามระบบ ดู hotkey.py)
 
 _TITLE = "Number Sequence Bot — บอทเรียงเลข"
 _MODE_NOTE = {
@@ -75,6 +72,9 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._register_panic_key()
+        warning = capture.screen_capture_warning()  # macOS: ไม่มีสิทธิ์จับภาพแล้วจะเงียบ ต้องบอกให้รู้
+        if warning:
+            self._on_log("warn", warning)
         # ตอนว่าง: ต่อมือถือ + อ่านตารางไว้ล่วงหน้า ให้กดเริ่มแล้วแตะเลขแรกได้ทันที
         self.solver.refresh_maps()
         self.solver.start_standby()
@@ -352,13 +352,10 @@ class MainWindow(QMainWindow):
         self.solver.stop()
 
     def _register_panic_key(self) -> None:
-        if keyboard is None:
-            self._on_log("warn", "ไลบรารี keyboard ใช้ไม่ได้ — panic key จะไม่ทำงาน (pip install keyboard)")
-            return
         try:
-            keyboard.add_hotkey(self.settings.panic_key, self._panic)
-        except Exception as exc:  # pragma: no cover
-            self._on_log("warn", f"ตั้ง panic key ไม่สำเร็จ: {exc}")
+            hotkey.register(self.settings.panic_key, self._panic)
+        except Exception as exc:  # ดักปุ่มไม่ได้ก็ยังใช้บอทได้ตามปกติ แค่ต้องกดหยุดในหน้าต่างบอทเอง
+            self._on_log("warn", f"ตั้ง panic key ไม่สำเร็จ ({exc}) — กดหยุดที่หน้าต่างบอทได้ตามปกติ")
 
     # ---- status ------------------------------------------------------------------
     def _elapsed(self) -> float:
@@ -437,9 +434,5 @@ class MainWindow(QMainWindow):
         self.solver.stop_standby()
         self._pull_settings_from_ui()
         self.settings.save()
-        if keyboard is not None:
-            try:
-                keyboard.remove_hotkey(self.settings.panic_key)
-            except Exception:
-                pass
+        hotkey.unregister(self.settings.panic_key)
         super().closeEvent(event)
