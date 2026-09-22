@@ -158,6 +158,11 @@ def _ocr_digits(proc: Image.Image, psm: int) -> Optional[int]:
         return None
 
 
+# (ความสูงตัวเลข px, psm) ตามลำดับที่ลอง — psm 7 (บรรทัดเดียว) ก่อน psm 8: psm 6 อ่านเลข "8" ตัวเดียว
+# ฟอนต์หนาไม่ออกเลยทุกขนาด แต่ psm 7 อ่านได้ และในชุดวัด 576 ภาพไม่เคยอ่านผิดแบบมั่นใจเหมือน psm 8
+_ATTEMPTS = [(h, 6) for h in _DIGIT_HEIGHTS] + [(_DIGIT_HEIGHTS[0], 7), (_DIGIT_HEIGHTS[0], 8)]
+
+
 def read_number_robust(
     img: Image.Image, valid_max: Optional[int] = None, parallel: bool = False
 ) -> Optional[int]:
@@ -181,9 +186,7 @@ def read_number_robust(
 
     # ตัดหาตัวเลขครั้งเดียว แล้วแค่ย่อ/ขยายต่างขนาดในแต่ละรอบ
     g, digit_h = _crop_to_digits(ImageOps.autocontrast(img.convert("L")))
-    # psm 7 (บรรทัดเดียว) ก่อน psm 8 — psm 6 อ่านเลข "8" ตัวเดียวฟอนต์หนาไม่ออกเลยทุกขนาด แต่ psm 7 อ่านได้
-    # และในชุดวัด 576 ภาพไม่เคยอ่านผิดแบบมั่นใจเหมือน psm 8
-    attempts = [(h, 6) for h in _DIGIT_HEIGHTS] + [(_DIGIT_HEIGHTS[0], 7), (_DIGIT_HEIGHTS[0], 8)]
+    attempts = _ATTEMPTS
     if parallel:
         futures = [
             _ocr_pool().submit(_ocr_digits, _scale_and_binarize(g, digit_h, target_h), psm)
@@ -207,6 +210,30 @@ def same_image(a: Image.Image, b: Image.Image) -> bool:
     return a.size == b.size and ImageChops.difference(a, b).getbbox() is None
 
 
+# พิกเซลที่ต่างเกิน _SIMILAR_PIXEL_DIFF (หลังเบลอ 1px) เกิน _SIMILAR_CELL_FRACTION ของช่อง = ช่องนั้นเปลี่ยน
+# วัดกับภาพ scrcpy จริง: noise JPEG q30 ของภาพเดิม 0.0% ของช่อง, เลขเปลี่ยนจริง ≥ 3.8% (แม้ต่างหลักเดียว 28→29)
+# — ห้ามย่อภาพก่อนเทียบ: ย่อเหลือช่องละ 12px แล้ว 7→10 ต่างเฉลี่ยแค่ 3.4 จับไม่ได้
+_SIMILAR_PIXEL_DIFF = 40
+_SIMILAR_CELL_FRACTION = 0.01
+
+
+def grid_similar(a: Image.Image, b: Image.Image, rows: int, cols: int) -> bool:
+    """ตารางสองภาพเป็นตารางเดียวกันไหม — เทียบทีละช่อง: เลขเปลี่ยนแค่ช่องเดียวต้องจับได้ แต่ noise จาก
+    การบีบอัดวิดีโอของ scrcpy ต้องไม่นับ (same_image เทียบทุกพิกเซลเข้มเกินไปสำหรับงานนี้)."""
+    if a.size != b.size:
+        return False
+    blur = ImageFilter.BoxBlur(1)
+    diff = ImageChops.difference(a.convert("L").filter(blur), b.convert("L").filter(blur))
+    strong = diff.point(lambda p: 255 if p > _SIMILAR_PIXEL_DIFF else 0)
+    w, h = a.size
+    for r in range(rows):
+        for c in range(cols):
+            cell = strong.crop((int(c * w / cols), int(r * h / rows), int((c + 1) * w / cols), int((r + 1) * h / rows)))
+            if cell.histogram()[255] > _SIMILAR_CELL_FRACTION * cell.width * cell.height:
+                return False
+    return True
+
+
 def cell_center(grid_rect: Rect, rows: int, cols: int, cell: Cell) -> Tuple[int, int]:
     """จุดกลางช่อง (row, col) เป็นพิกัดเดียวกับ grid_rect."""
     left, top, w, h = grid_rect
@@ -224,6 +251,34 @@ def read_cells(
 ) -> Dict[Cell, Optional[int]]:
     """จับภาพ grid_rect ครั้งเดียว แล้ว OCR เฉพาะช่องที่ขอ (None = ทุกช่อง) แบบขนาน
     คืน {(row, col): เลข หรือ None ถ้าอ่านไม่ออก/ช่องว่าง}."""
+    crops = _cell_crops(grid_rect, rows, cols, cells, cell_pad_ratio)
+    nums = _ocr_pool().map(lambda img: read_number_robust(img, valid_max=max_number), crops.values())
+    return dict(zip(crops.keys(), nums))
+
+
+def read_cells_votes(
+    grid_rect: Rect,
+    rows: int,
+    cols: int,
+    cells: Iterable[Cell],
+    cell_pad_ratio: float = 0.16,
+) -> Dict[Cell, List[Optional[int]]]:
+    """เหมือน read_cells แต่อ่านครบทุกรอบใน `_ATTEMPTS` (ไม่หยุดที่รอบแรกที่อ่านได้) แล้วคืนผลทุกรอบต่อช่อง
+    ให้ gridsolve นับเสียง — ใช้กับช่องที่ผลรอบแรกขัดกับกติกาเกม. จับภาพใหม่ = ได้เฟรมใหม่อีกตัวอย่าง.
+    ยิงทุก (ช่อง, รอบ) เข้า pool พร้อมกัน (~1–2 ครั้ง OCR แทน 5 ครั้งเรียงกัน) — **ห้ามเรียกจาก thread ใน pool**."""
+    crops = _cell_crops(grid_rect, rows, cols, cells, cell_pad_ratio)
+    futures = {}
+    for cell, img in crops.items():
+        g, digit_h = _crop_to_digits(ImageOps.autocontrast(img.convert("L")))
+        futures[cell] = [
+            _ocr_pool().submit(_ocr_digits, _scale_and_binarize(g, digit_h, t), psm) for t, psm in _ATTEMPTS
+        ]
+    return {cell: [f.result() for f in fs] for cell, fs in futures.items()}
+
+
+def _cell_crops(
+    grid_rect: Rect, rows: int, cols: int, cells: Optional[Iterable[Cell]], cell_pad_ratio: float
+) -> Dict[Cell, Image.Image]:
     _, _, w, h = grid_rect
     full = grab(grid_rect)
     cell_w = w / cols
@@ -242,8 +297,7 @@ def read_cells(
         if cx1 <= cx0 or cy1 <= cy0:
             continue
         crops[(r, c)] = full.crop((int(cx0), int(cy0), int(cx1), int(cy1)))
-    nums = _ocr_pool().map(lambda img: read_number_robust(img, valid_max=max_number), crops.values())
-    return dict(zip(crops.keys(), nums))
+    return crops
 
 
 def read_grid_numbers(

@@ -16,11 +16,16 @@ CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
 Rect = Tuple[int, int, int, int]  # (left, top, width, height) — absolute screen px
 
+# โหมดการเล่น (ผู้ใช้เลือกในหน้าต่างหลัก)
+MODE_OCR = "ocr"  # 2 กรอบ: ตาราง + เลขต่อไป — ยืนยันทุกคลิกจากกรอบเลขต่อไป แตะไม่ติดก็ resync เอง
+MODE_GRID = "grid"  # กรอบตารางอย่างเดียว: อ่านครั้งเดียวแล้วกดเรียงต่อเนื่องจนครบ ไม่รอยืนยันจากเกม
+
 
 @dataclass
 class Settings:
     grid_box: Optional[Rect] = None
-    next_box: Optional[Rect] = None
+    next_box: Optional[Rect] = None  # ไม่ใช้ในโหมด MODE_GRID
+    mode: str = MODE_OCR
     rows: int = 5
     cols: int = 5
     max_number: int = 25
