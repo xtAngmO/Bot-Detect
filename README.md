@@ -33,7 +33,8 @@ emulator such as LDPlayer, or in a browser.
 
 - Windows 10/11, or macOS 12+ (Apple Silicon or Intel)
 - Python 3.11+ (developed on 3.14 for Windows, 3.13 for macOS)
-- **Tesseract OCR** — found automatically in `PATH` or at the standard install location
+- **Tesseract OCR** — **already included in the packaged downloads**, nothing to install. Only needed
+  when running from source: found automatically in `PATH` or at the standard install location
   ([Windows](https://github.com/UB-Mannheim/tesseract/wiki): `C:\Program Files\Tesseract-OCR\tesseract.exe`;
   macOS: `brew install tesseract`). For another location, set `tesseract_cmd` in `config.json`.
 - For playing on a phone: **scrcpy 4.x** with USB debugging enabled
@@ -195,6 +196,10 @@ overwritten.
   and taps drift down by the height of the bar.
 - OCR assumes dark digits on a light background. A different colour scheme needs changes to
   `_INK_THRESHOLD` in `capture.py`.
+- The packaged builds carry their own copy of Tesseract, but **not** scrcpy or adb — install those
+  yourself to play on a phone.
+- The macOS build is Apple Silicon (arm64) only; it does not run on Intel Macs. The two downloads are
+  not interchangeable — `.exe` is Windows only and `.app` is macOS only.
 - The packaged builds are unsigned. Windows SmartScreen shows "More info → Run anyway"; on macOS use
   right-click → Open the first time, or run `xattr -dr com.apple.quarantine "Number Sequence Bot.app"`.
 

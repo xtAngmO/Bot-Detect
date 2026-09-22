@@ -18,6 +18,8 @@ import mss
 import pytesseract
 from PIL import Image, ImageChops, ImageFilter, ImageOps
 
+import apppaths
+
 Rect = Tuple[int, int, int, int]
 Cell = Tuple[int, int]  # (row, col)
 
@@ -48,9 +50,28 @@ else:
     _DEFAULT_TESSERACT = ("/opt/homebrew/bin/tesseract", "/usr/local/bin/tesseract")
 
 
+def bundled_tesseract() -> str:
+    """tesseract ที่แนบมากับโปรแกรม — มีเฉพาะไฟล์ที่ build แจก (รันจากซอร์สคืนค่าว่าง)."""
+    if not apppaths.FROZEN:
+        return ""
+    name = "tesseract.exe" if sys.platform == "win32" else "tesseract"
+    path = os.path.join(apppaths.resource_dir(), "tesseract", name)
+    return path if os.path.isfile(path) else ""
+
+
 def configure_tesseract(explicit_cmd: str = "") -> None:
+    """ลำดับการเลือก: ที่ผู้ใช้ตั้งเอง → ตัวที่แนบมากับโปรแกรม → ตัวที่ติดตั้งในเครื่อง
+
+    ตัวที่แนบมาต้องบอก TESSDATA_PREFIX ด้วย ไม่งั้นมันไปหา eng.traineddata ตามที่ build ไว้ในเครื่อง
+    คนสร้าง แล้วฟ้อง "Error opening data file" บนเครื่องคนอื่น
+    """
     if explicit_cmd:
         pytesseract.pytesseract.tesseract_cmd = explicit_cmd
+        return
+    bundled = bundled_tesseract()
+    if bundled:
+        pytesseract.pytesseract.tesseract_cmd = bundled
+        os.environ["TESSDATA_PREFIX"] = os.path.join(apppaths.resource_dir(), "tessdata")
         return
     found = shutil.which("tesseract") or next((p for p in _DEFAULT_TESSERACT if os.path.isfile(p)), "")
     if found:
