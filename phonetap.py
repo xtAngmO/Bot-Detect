@@ -25,7 +25,7 @@ from ctypes import wintypes
 from typing import List, Optional, Tuple
 
 DEVICE_JAR = "/data/local/tmp/hiu-bot-scrcpy-server.jar"  # คนละ path กับของ scrcpy ตัวจริง
-# INJECT_TOUCH_EVENT ของ scrcpy 4.x (ตรงกับ phone_remote/protocol.py ที่เทียบ byte กับซอร์ส v4.1 แล้ว):
+# INJECT_TOUCH_EVENT ของ scrcpy 4.x (byte อ้างอิงอยู่ใน tests/test_phonetap.py — เทียบกับซอร์ส v4.1 แล้ว):
 # type, action, pointer_id, x, y, screen_w, screen_h, pressure (u16 fixed), action_button, buttons
 _TOUCH = struct.Struct(">BBQiiHHHii")
 _TYPE_INJECT_TOUCH_EVENT = 2

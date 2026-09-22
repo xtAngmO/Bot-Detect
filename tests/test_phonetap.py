@@ -1,14 +1,12 @@
 """เทสต์ phonetap (ไม่ต้องมีมือถือ) — รัน: .venv\\Scripts\\python.exe tests\\test_phonetap.py
 
 - parse ผลของ adb / เลือกเครื่อง / ขนาดจอ
-- byte ของ INJECT_TOUCH_EVENT เทียบกับ phone_remote/protocol.py (ตัวนั้นเทียบ byte กับซอร์ส scrcpy v4.1 แล้ว)
+- byte ของ INJECT_TOUCH_EVENT เทียบกับค่าอ้างอิงของ scrcpy 4.x (ดู _REF_DOWN)
 - handshake + แตะ + หลุดกลางทาง กับ server ปลอมบน localhost ที่ทำตัวเหมือน scrcpy-server (dummy byte →
   ชื่อเครื่อง 64 byte → control)
 """
-import importlib.util
 import os
 import socket
-import struct
 import sys
 import threading
 import time
@@ -43,21 +41,17 @@ def test_parse_wm_size_prefers_override() -> None:
     assert phonetap.parse_wm_size("Physical size: 1260x2800\nOverride size: 1080x2400\n") == (1080, 2400)
 
 
-def test_touch_bytes_match_phone_remote_protocol() -> None:
-    down = phonetap.touch_message(phonetap.ACTION_DOWN, 630, 700, 1260, 2800)
-    up = phonetap.touch_message(phonetap.ACTION_UP, 630, 700, 1260, 2800)
-    assert len(down) == 32 and down[0] == 2 and down[1] == 0 and up[1] == 1
-    assert struct.unpack(">Q", down[2:10])[0] == 0xFFFF_FFFF_FFFF_FFFE  # GENERIC_FINGER (-2)
-    path = os.path.join(ROOT, "phone_remote", "protocol.py")
-    if not os.path.isfile(path):
-        print("  (ข้ามการเทียบกับ phone_remote — ไม่มีโฟลเดอร์นั้น)")
-        return
-    spec = importlib.util.spec_from_file_location("phone_remote_protocol", path)
-    proto = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = proto  # dataclass ในโมดูลนั้นหาโมดูลตัวเองจาก sys.modules
-    spec.loader.exec_module(proto)
-    assert down == proto.inject_touch(proto.ACTION_DOWN, proto.POINTER_ID_GENERIC_FINGER, 630, 700, 1260, 2800, 1.0)
-    assert up == proto.inject_touch(proto.ACTION_UP, proto.POINTER_ID_GENERIC_FINGER, 630, 700, 1260, 2800, 0.0)
+# byte อ้างอิงของ INJECT_TOUCH_EVENT (scrcpy 4.x) ที่ (630, 700) บนจอ 1260×2800 — สร้างจากตัวเข้ารหัสของ
+# phone_remote/protocol.py (เทียบ byte กับซอร์ส scrcpy v4.1 แล้ว; โฟลเดอร์นั้นถูกเอาออกจาก repo 2026-09-23
+# ดูได้ใน git history commit 054900a) — type 2, action, pointer GENERIC_FINGER (-2), x, y, w, h,
+# pressure u16 fixed (DOWN = 0xFFFF, UP = 0), action_button, buttons
+_REF_DOWN = bytes.fromhex("0200fffffffffffffffe00000276000002bc04ec0af0ffff0000000000000000")
+_REF_UP = bytes.fromhex("0201fffffffffffffffe00000276000002bc04ec0af000000000000000000000")
+
+
+def test_touch_bytes_match_scrcpy_protocol() -> None:
+    assert phonetap.touch_message(phonetap.ACTION_DOWN, 630, 700, 1260, 2800) == _REF_DOWN
+    assert phonetap.touch_message(phonetap.ACTION_UP, 630, 700, 1260, 2800) == _REF_UP
 
 
 class FakeServer:
@@ -123,6 +117,6 @@ def test_handshake_tap_and_disconnect() -> None:
 if __name__ == "__main__":
     test_parse_devices_and_pick_serial()
     test_parse_wm_size_prefers_override()
-    test_touch_bytes_match_phone_remote_protocol()
+    test_touch_bytes_match_scrcpy_protocol()
     test_handshake_tap_and_disconnect()
     print("test_phonetap.py OK")

@@ -132,7 +132,6 @@ with a no-op, so your real `config.json` is never overwritten.
 | `config.py` | Settings model and `config.json` load/save |
 | `fonts/`, `assets/icons/` | Bundled fonts and icons (license files included) |
 | `tests/` | Headless tests and real-capture fixtures |
-| `phone_remote/` | A separate app for mirroring and controlling an Android phone (see its own README) |
 
 ## Known limitations
 
