@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Number Sequence Bot — <!-- ชื่อเรื่อง --></title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Number Sequence Bot — shared brand base
+   สืบทอดพาเลตต์จากโปรเจกต์พี่น้อง Word Detect Bot (D:\Github\bot_detect_word)
+   ใช้เป็นฐานทั้ง mockup (draft/) และเอกสารแผน (plan/)
+   ============================================================ */
+:root{
+  --bg:#0a0a0a;          /* พื้นหลังแอป */
+  --panel:#0d0d0e;       /* การ์ด/เซ็กชัน (rail/topbar/statusbar) */
+  --sunken:#070708;      /* พื้นกล่อง log และพรีวิว */
+  --elev:#161618;        /* ช่องกรอก/พื้นผิวยกระดับ */
+  --elev-hi:#1f1f22;     /* hover */
+  --hair:#1a1a1c;        /* เส้นคั่นภายในเซ็กชัน */
+  --border:#262628;      /* เส้นคั่นระดับโครงสร้าง */
+  --border-hi:#3a3a3d;   /* focus/hover */
+  --text:#ededed;
+  --text-dim:#a0a0a0;
+  --text-faint:#808080;
+  --white:#fafafa;
+  --green:#22c55e;       /* สำเร็จ/กำลังทำงาน */
+  --blue:#3b82f6;        /* ข้อมูล/แอ็กชัน */
+  --red:#ef4444;         /* หยุด/อันตราย/panic */
+  --amber:#f59e0b;       /* เตือน */
+  --log-act:#7fb2f7;
+  --log-err:#f87171;
+  --font:"Anuphan","Segoe UI",system-ui,sans-serif;
+  --mono:"JetBrains Mono","Consolas",monospace;
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --r-xl:20px;
+
+  /* type scale — อัตราส่วน ~1.27 ต่อขั้น ให้ลำดับความสำคัญอ่านออกชัด
+     ใช้แค่ 5 ขั้นนี้เท่านั้น อย่าใส่ px ลอยๆ ใน mockup */
+  --t-micro:11px;   /* ป้ายกำกับเล็ก, uppercase label, หมายเลขเซ็กชัน */
+  --t-body:14px;    /* ตัวเนื้อหา, ปุ่ม, ช่องกรอก */
+  --t-title:18px;   /* หัวข้อการ์ด/เซ็กชัน */
+  --t-lead:23px;    /* ตัวเลขสถานะเด่นๆ */
+  --t-display:29px; /* ชื่อแอปบน header */
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:var(--font); font-size:var(--t-body); line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  display:flex; align-items:flex-start; justify-content:center;
+  padding:32px 16px; gap:24px;
+}
+code,.mono{font-family:var(--mono)}
+
+/* กรอบจำลอง "หน้าต่างโปรแกรมบน Windows" ครอบ mockup ไว้ */
+.win{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--r-lg);
+  overflow:hidden;
+  box-shadow:0 24px 64px rgba(0,0,0,.6);
+}
+.win-bar{
+  height:34px; display:flex; align-items:center; gap:8px;
+  padding:0 12px; background:#141414; border-bottom:1px solid var(--border);
+  font-size:var(--t-micro); color:var(--text-faint);
+}
+.win-dot{width:11px;height:11px;border-radius:50%;background:#333}
+
+/* ป้ายกำกับตัวเลือก (ใช้ตอนวางเทียบกันหลายแบบ) */
+.tag{
+  font-size:var(--t-micro); letter-spacing:.08em; text-transform:uppercase;
+  color:var(--text-faint); margin-bottom:10px; font-weight:600;
+}
+</style>
+</head>
+<body>
+  <!-- เนื้อหา mockup -->
+</body>
+</html>
