@@ -61,6 +61,7 @@ class MainWindow(QMainWindow):
         self.grid_overlay = FrameOverlay("กรอบตาราง 5×5", "#22c55e", on_change=self._on_grid_change)
         self.next_overlay = FrameOverlay("กรอบเลขต่อไป", "#3b82f6", on_change=self._on_next_change)
         self._restore_overlay_geometry()
+        self.grid_overlay.set_grid(self.settings.rows, self.settings.cols)
         self.highlight = HighlightRing()
 
         self._running = False  # ฝั่ง UI: กดเริ่มแล้วยังไม่ได้ finished (thread อาจยังไม่ขึ้น/ยังไม่จบ)
@@ -94,10 +95,11 @@ class MainWindow(QMainWindow):
         col.setContentsMargins(0, 0, 0, 0)
         col.setSpacing(0)
         col.addWidget(self._build_control())
+        col.addWidget(self._build_log())  # ใต้ควบคุมเลย — ผู้ใช้ขอให้ log อยู่ด้านบน
         col.addWidget(self._build_mode())
         col.addWidget(self._build_frames())
         col.addWidget(self._build_settings())
-        col.addWidget(self._build_log(), 1)
+        col.addStretch(1)
         scroll.setWidget(content)
         outer.addWidget(scroll, 1)
         self.setCentralWidget(root)
@@ -220,6 +222,9 @@ class MainWindow(QMainWindow):
         for spin in (self.rows_spin, self.cols_spin, self.max_spin, self.target_time_spin, self.delay_spin,
                      self.poll_spin):
             spin.valueChanged.connect(self._on_setting_edited)
+        for spin in (self.rows_spin, self.cols_spin):  # เส้น grid บนกรอบตารางเปลี่ยนตามทันที (แม้ระหว่างรัน)
+            spin.valueChanged.connect(
+                lambda _v: self.grid_overlay.set_grid(self.rows_spin.value(), self.cols_spin.value()))
         return sec
 
     def _build_log(self) -> QWidget:
@@ -229,11 +234,11 @@ class MainWindow(QMainWindow):
         self.log_view.setObjectName("logBox")
         self.log_view.setReadOnly(True)
         self.log_view.setFont(theme.mono_font(theme.T_LOG, mix=True))
-        self.log_view.setMinimumHeight(200)
-        sec.body.addWidget(self.log_view, 1)
+        self.log_view.setFixedHeight(200)  # สูงคงที่ ไม่ดันเซ็กชันข้างล่างลงไปไกล
+        sec.body.addWidget(self.log_view)
         clear = button("ล้างบันทึก", "eraser", "ghost")
         clear.clicked.connect(self._clear_log)
-        sec.body.addWidget(clear)
+        sec.body.addWidget(clear, 0, Qt.AlignmentFlag.AlignRight)
         return sec
 
     # ---- overlay wiring ------------------------------------------------------

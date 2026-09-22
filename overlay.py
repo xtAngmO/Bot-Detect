@@ -4,6 +4,10 @@
 Qt.WindowTransparentForInput** เพราะจะทำให้คลิกทะลุทั้งบานจนลากขอบ/ย่อขยายไม่ได้เลย
 (บทเรียนจากโปรเจกต์พี่น้อง bot_detect_word/ui_overlay.py) — setMask ทำให้เฉพาะเส้นขอบหนา
 รับคลิก (ลาก/ย่อขยายได้) ส่วนพื้นที่ตรงกลางไม่อยู่ใน region เลยคลิกทะลุไปโดนแอปข้างล่างแทน
+
+กรอบตารางตีเส้น grid ตามแถว×คอลัมน์ (`set_grid`) ให้เล็งเส้นตรงรอยต่อการ์ดได้ — เส้นต้องอยู่ใน mask ด้วย
+(นอก mask วาดไม่ติด) หนาแค่ 1px ตรงรอยต่อช่อง: จุดคลิกของบอทคือกลางช่อง และ OCR ตัดขอบช่องทิ้ง 16% ก่อนอ่าน
+(`cell_pad_ratio`) เส้นที่ mss จับติดมาด้วยจึงไม่กวนทั้งการคลิกและการอ่าน
 """
 from __future__ import annotations
 
@@ -17,6 +21,7 @@ Rect = Tuple[int, int, int, int]
 
 _BORDER = 6
 _HANDLE = 16
+_GRID_LINE = 1
 
 
 class FrameOverlay(QWidget):
@@ -34,16 +39,37 @@ class FrameOverlay(QWidget):
         self._drag_offset = None
         self._resizing = False
         self._on_change = on_change
+        self._grid: Optional[Tuple[int, int]] = None  # (rows, cols) — None = ไม่ตีเส้น
         self.setMinimumSize(80, 80)
         self.resize(380, 380)
         self.move(200, 200)
         self._apply_mask()
 
     # ---- geometry / mask -------------------------------------------------
+    def set_grid(self, rows: int, cols: int) -> None:
+        """ตีเส้นแบ่งช่องในกรอบ — แบ่งแบบเดียวกับที่บอทหารกรอบเป็นช่อง (capture.cell_center)."""
+        self._grid = (rows, cols) if rows > 0 and cols > 0 else None
+        self._apply_mask()
+        self.update()
+
+    def _grid_lines(self) -> list:
+        if not self._grid:
+            return []
+        rows, cols = self._grid
+        inner = self.rect().adjusted(_BORDER, _BORDER, -_BORDER, -_BORDER)
+        lines = [QRect(inner.left() + round(inner.width() * c / cols), inner.top(), _GRID_LINE, inner.height())
+                 for c in range(1, cols)]
+        lines += [QRect(inner.left(), inner.top() + round(inner.height() * r / rows), inner.width(), _GRID_LINE)
+                  for r in range(1, rows)]
+        return lines
+
     def _apply_mask(self) -> None:
         outer = QRegion(self.rect())
         inner = QRegion(self.rect().adjusted(_BORDER, _BORDER, -_BORDER, -_BORDER))
-        self.setMask(outer.subtracted(inner))
+        region = outer.subtracted(inner)
+        for line in self._grid_lines():
+            region = region.united(QRegion(line))
+        self.setMask(region)
 
     def _notify_change(self) -> None:
         if self._on_change:
@@ -75,6 +101,10 @@ class FrameOverlay(QWidget):
         p.setPen(pen)
         half = _BORDER / 2
         p.drawRect(self.rect().adjusted(int(half), int(half), -int(half), -int(half)))
+        line_color = QColor(self._color)
+        line_color.setAlpha(170)
+        for line in self._grid_lines():
+            p.fillRect(line, line_color)
         p.setPen(QColor("#fafafa"))
         p.drawText(_BORDER + 4, _BORDER + 14, self._label)
         p.fillRect(

@@ -6,6 +6,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QPoint
 from PySide6.QtWidgets import QApplication
 
 import config as config_module
@@ -98,8 +99,34 @@ def test_status_shows_running_and_why_it_stopped() -> None:
     win.close()
 
 
+def test_grid_frame_draws_cell_lines_and_stays_click_through() -> None:
+    win = _window()
+    ov = win.grid_overlay
+    ov.resize(5 * 60 + 12, 5 * 80 + 12)  # ด้านใน 300×400 → ช่องละ 60×80 (ขอบกรอบหนา 6)
+    win.rows_spin.setValue(5)
+    win.cols_spin.setValue(5)
+    ov.set_grid(5, 5)
+    mask = ov.mask()
+    # เส้นต้องอยู่ใน mask (ไม่งั้นวาดไม่ติด) แต่กลางช่องต้องไม่อยู่ — คลิกทะลุไปโดนเกมข้างล่าง
+    assert mask.contains(QPoint(6 + 60, 6 + 30)), "เส้นแนวตั้งระหว่างคอลัมน์ 0|1"
+    assert mask.contains(QPoint(6 + 30, 6 + 80)), "เส้นแนวนอนระหว่างแถว 0|1"
+    assert not mask.contains(QPoint(6 + 30, 6 + 40)), "กลางช่อง (0,0) ต้องคลิกทะลุ"
+    win.cols_spin.setValue(4)  # แก้คอลัมน์ → เส้นย้ายตามทันที (ช่องละ 75)
+    assert ov.mask().contains(QPoint(6 + 75, 6 + 30)) and not ov.mask().contains(QPoint(6 + 60, 6 + 30))
+    win.close()
+
+
+def test_log_sits_right_under_control() -> None:
+    win = _window()
+    col = win.control_section.parentWidget().layout()
+    assert col.indexOf(win.log_section) == col.indexOf(win.control_section) + 1
+    win.close()
+
+
 if __name__ == "__main__":
     test_main_window_constructs_and_signals_fire()
     test_grid_mode_needs_only_the_grid_frame()
     test_status_shows_running_and_why_it_stopped()
+    test_grid_frame_draws_cell_lines_and_stays_click_through()
+    test_log_sits_right_under_control()
     print("test_app_smoke.py OK")

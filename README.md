@@ -58,7 +58,8 @@ python -m venv .venv
    the game window uncovered, because the bot reads the numbers from the screen.
 2. Pick a **mode** in the *Mode* section.
 3. In the *Screen frames* section, press **Show grid frame** and drag the green frame over the whole
-   5×5 grid. Drag the frame's edge to move it, and drag the bottom-right handle to resize it.
+   5×5 grid. Drag the frame's edge to move it, and drag the bottom-right handle to resize it. The frame
+   draws the cell lines, so line them up with the gaps between the cards.
 4. *OCR mode only:* press **Show next-number frame** and drag the blue frame over the number in the
    game's "next number" card.
 5. Adjust *Grid and pacing* if needed:
