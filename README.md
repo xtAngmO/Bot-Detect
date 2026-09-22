@@ -77,6 +77,27 @@ python3 -m venv .venv
 .venv/bin/python main.py            # macOS
 ```
 
+## Build a release yourself
+
+PyInstaller cannot cross-compile, so each file must be built on its own system. Tesseract must be
+installed on the build machine first — the spec copies it into the result.
+
+```powershell
+# Windows  ->  dist\NumberSequenceBot.exe  (single file)
+.venv\Scripts\pip install -r requirements-dev.txt
+.venv\Scripts\pyinstaller --noconfirm --clean NumberSequenceBot.spec
+```
+
+```bash
+# macOS  ->  dist/NumberSequenceBot.app
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/pyinstaller --noconfirm --clean NumberSequenceBot.spec
+# zip it with ditto, not zip — the bundle contains symlinks
+ditto -c -k --keepParent dist/NumberSequenceBot.app NumberSequenceBot-macos-arm64.zip
+```
+
+Pushing a `v*` tag runs the same two builds on GitHub Actions and attaches both to a release.
+
 ## Usage
 
 1. Open the game so the grid is visible on screen. If it runs on a phone, start `scrcpy` first. Keep

@@ -113,8 +113,8 @@ if IS_MAC:
             # ไม่ใส่ = macOS จะรันแบบขยายภาพ 2 เท่าให้ ทำให้ตัวหนังสือเบลอทั้งแอปบนจอ Retina
             "NSHighResolutionCapable": True,
             "LSApplicationCategoryType": "public.app-category.utilities",
-            "CFBundleShortVersionString": "1.0.0",
-            "CFBundleVersion": "1.0.0",
+            "CFBundleShortVersionString": "1.0.1",
+            "CFBundleVersion": "1.0.1",
         },
     )
 else:
